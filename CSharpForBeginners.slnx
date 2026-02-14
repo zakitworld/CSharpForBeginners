@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="CSharpForBeginners/CSharpForBeginners.csproj" />
+  <Project Path="HelloWorld/HelloWorld.csproj" />
+</Solution>
