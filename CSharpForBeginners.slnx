@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="CSharpForBeginners/CSharpForBeginners.csproj" />
+  <Project Path="CSharpSyntaxBasics/CSharpSyntaxBasics.csproj" Id="32015de0-2f95-4900-898d-6dd59cecc491" />
   <Project Path="HelloWorld/HelloWorld.csproj" />
 </Solution>
