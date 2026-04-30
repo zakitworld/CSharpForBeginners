@@ -41,7 +41,7 @@ builder.Services.AddHangfire(config => config
     .UseSQLiteStorage(builder.Configuration.GetConnectionString("Bookings") ?? "Data Source = Bookings.db"));
 
 builder.Services.AddHangfireServer();
-builder.Services.AddAutoMapper(typeof(AutoMapperProfiles).Assembly);
+builder.Services.AddAutoMapper(config => config.AddMaps(typeof(AutoMapperProfiles).Assembly));
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateBookingRequestValidator>();
 
