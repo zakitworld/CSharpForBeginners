@@ -1,8 +1,11 @@
 using BookingApp.Models;
 using BookingApp.Services;
+using BookingApp.DTOs;
+using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+
 
 namespace BookingApp.Controllers
 {
@@ -11,12 +14,15 @@ namespace BookingApp.Controllers
     [Route("api/[controller]")]
     public class BookingsController : ControllerBase
     {
-        private readonly BookingService _service;
+        private readonly IBookingService _service;
+        private readonly IMapper _mapper;
 
-        public BookingsController(BookingService service)
+        public BookingsController(IBookingService service, IMapper mapper)
         {
             _service = service;
+            _mapper = mapper;
         }
+
 
         [HttpGet]
         public async Task<IActionResult> Get()
@@ -29,21 +35,23 @@ namespace BookingApp.Controllers
             if (User.IsInRole("Admin"))
             {
                 var allBookings = await _service.GetBookingsAsync();
-                return Ok(allBookings);
+                return Ok(_mapper.Map<List<BookingDto>>(allBookings));
             }
             
             var userBookings = await _service.GetUserBookingsAsync(userId);
-            return Ok(userBookings);
+            return Ok(_mapper.Map<List<BookingDto>>(userBookings));
         }
 
+
         [HttpPost]
-        public async Task<IActionResult> Create(Booking booking)
+        public async Task<IActionResult> Create(CreateBookingRequest request)
         {
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!Guid.TryParse(userIdStr, out var userId))
                 return Unauthorized();
 
-            booking.UserId = userId; // Force the userId to be the authenticated user
+            var booking = _mapper.Map<Booking>(request);
+            booking.UserId = userId;
 
             if (booking.Start >= booking.End)
                 return BadRequest("Invalid time range");
@@ -53,8 +61,9 @@ namespace BookingApp.Controllers
             if (!success)
                 return BadRequest("Booking conflict detected");
 
-            return Ok(booking);
+            return Ok(_mapper.Map<BookingDto>(booking));
         }
+
 
         [HttpGet("admin/all")]
         [Authorize(Roles = "Admin")]

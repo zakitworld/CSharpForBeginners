@@ -7,6 +7,9 @@ using BookingApp.Data;
 using BookingApp.Models;
 using Microsoft.EntityFrameworkCore;
 using BCrypt.Net;
+using BookingApp.DTOs;
+using AutoMapper;
+
 
 namespace BookingApp.Controllers
 {
@@ -16,12 +19,15 @@ namespace BookingApp.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly AppDbContext _context;
+        private readonly IMapper _mapper;
 
-        public AuthController(IConfiguration configuration, AppDbContext context)
+        public AuthController(IConfiguration configuration, AppDbContext context, IMapper mapper)
         {
             _configuration = configuration;
             _context = context;
+            _mapper = mapper;
         }
+
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
@@ -29,19 +35,16 @@ namespace BookingApp.Controllers
             if (await _context.Users.AnyAsync(u => u.Email == request.Email))
                 return BadRequest("Email already registered");
 
-            var user = new User
-            {
-                Username = request.Username,
-                Email = request.Email,
-                Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                Roles = new[] { "User" } // Default role
-            };
+            var user = _mapper.Map<User>(request);
+            user.Password = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            user.Roles = new[] { "User" };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Registration successful" });
         }
+
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -80,17 +83,9 @@ namespace BookingApp.Controllers
             return Ok(new
             {
                 token = tokenHandler.WriteToken(token),
-                user = new 
-                { 
-                    id = user.Id, 
-                    username = user.Username, 
-                    email = user.Email,
-                    roles = user.Roles
-                }
+                user = _mapper.Map<UserDto>(user)
             });
         }
     }
-
-    public record RegisterRequest(string Username, string Email, string Password);
-    public record LoginRequest(string Email, string Password);
 }
+

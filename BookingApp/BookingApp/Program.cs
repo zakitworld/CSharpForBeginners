@@ -5,11 +5,57 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using BookingApp.Hubs;
+using Hangfire;
+using Hangfire.Storage.SQLite;
+using Serilog;
+using BookingApp.Middleware;
+using BookingApp.Helpers;
+using BookingApp.Validators;
+using FluentValidation;
+
+using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.RateLimiting;
+
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+
+
 // Add services to the container.
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
+
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSQLiteStorage(builder.Configuration.GetConnectionString("Bookings") ?? "Data Source = Bookings.db"));
+
+builder.Services.AddHangfireServer();
+builder.Services.AddAutoMapper(typeof(AutoMapperProfiles).Assembly);
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<CreateBookingRequestValidator>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("fixed", opt =>
+    {
+        opt.Window = TimeSpan.FromSeconds(60);
+        opt.PermitLimit = 30; // 30 requests per minute
+    });
+});
+
+
+
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"] ?? "a_very_long_and_secure_secret_key_that_is_at_least_32_characters";
@@ -35,9 +81,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
+
     });
 });
 
@@ -45,10 +93,17 @@ var connectionString =
     builder.Configuration.GetConnectionString("Bookings")
     ?? "Data Source = Bookings.db";
 
-builder.Services.AddScoped<BookingService>();
+builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 builder.Services.AddSqlite<AppDbContext>(connectionString);
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionMiddleware>();
+app.UseRateLimiter();
+
+
 
 using (var scope = app.Services.CreateScope())
 {
@@ -76,5 +131,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<BookingHub>("/bookingHub");
+app.UseHangfireDashboard();
+
+// Register a recurring job
+RecurringJob.AddOrUpdate("Heartbeat", () => Console.WriteLine("Hangfire Heartbeat: Service is running."), Cron.Minutely);
+
 
 app.Run();
